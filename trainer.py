@@ -4,8 +4,8 @@ import argparse
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DDPPlugin
-from net.ddp.deepmc import DeepMC
-from util.ddp.dataloader.deepmc_dataloader import DeepMCDataLoader
+from net.deepmc import DeepMC
+from utils.dataloader import DeepMCDataLoader
 
 
 def get_args():
