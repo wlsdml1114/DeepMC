@@ -1,7 +1,10 @@
 import torch
+
 import pytorch_lightning as pl
+
 from .dataset import DeepMCDataset
 from typing import Tuple, Dict, Optional
+
 class DeepMCDataLoader(pl.LightningDataModule):
     def __init__(self, file_path : str, predictor : list, target : str, seq_len : int, pred_len : int ,st_num : int = 90, levels : int = 5, batchsize : int = 16, num_workers : int =24):
         super().__init__()

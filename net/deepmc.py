@@ -19,18 +19,16 @@ class Attention(nn.Module):
         return F.softmax(attention, dim=1)
 
 class LSTMstack(nn.Module):
-    def __init__(self, seq_len):
+    def __init__(self):
         super().__init__()
-        self.seq_len = seq_len
         self.sequence= nn.Sequential(
-            nn.Conv1d(1,1,5,padding=2),
+            nn.Conv1d(7,7,4),
             nn.ReLU(),
-            nn.BatchNorm1d(num_features=1),
-            nn.Conv1d(1,1,5,padding=2),
+            nn.BatchNorm1d(num_features=7),
+            nn.Conv1d(7,7,4),
             nn.ReLU(),
-            nn.BatchNorm1d(num_features=1),
-            nn.LSTM(input_size = 1, hidden_size = 1, dropout = 0.2),
-            nn.ReLU()
+            nn.BatchNorm1d(num_features=7),
+            nn.LSTM(input_size = 18, hidden_size = 18, dropout = 0.2),
         )
     def forward(self, WPD):
         return self.sequence(WPD)
@@ -39,13 +37,13 @@ class CNNstack(nn.Module):
     def __init__(self):
         super().__init__()
         self.sequence= nn.Sequential(
-            nn.Conv1d(1,1,5,padding=2),
+            nn.Conv1d(7,7,4),
             nn.ReLU(),
-            nn.BatchNorm1d(num_features=1),
-            nn.Conv1d(1,1,5,padding=2),
+            nn.BatchNorm1d(num_features=7),
+            nn.Conv1d(7,7,4),
             nn.ReLU(),
-            nn.BatchNorm1d(num_features=1),
-            nn.Conv1d(1,1,5,padding=2),
+            nn.BatchNorm1d(num_features=7),
+            nn.Conv1d(7,7,4),
             nn.ReLU(),
             nn.Flatten()
         )

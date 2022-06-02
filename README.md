@@ -1,1 +1,2 @@
 # DeepMC
+- DeepMC(Kumar, Peeyush, et al. "Micro-climate Prediction-Multi Scale Encoder-decoder based Deep Learning Framework." Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining. 2021.) 논문의 모델을 구현하기 위해 만든 프로젝트
