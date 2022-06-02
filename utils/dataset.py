@@ -6,7 +6,7 @@ import numpy as np
 from scipy.interpolate import make_interp_spline
 
 class DeepMCDataset(object):
-    def __init__(self, file_path : str, predictors : list, target : str, seq_len : int, st_num : int = 90, levels :int = 5, RLat : float = 0.96, RLong : float = 1.5) -> None:
+    def __init__(self, file_path : str, predictors : list, target : str, seq_len : int, pred_len : int ,st_num : int = 90, levels :int = 5, RLat : float = 0.96, RLong : float = 1.5) -> None:
         try :
             temp = pd.read_csv(file_path)
         except :
@@ -17,6 +17,7 @@ class DeepMCDataset(object):
         self.st_num = st_num
         self.levels = levels
         self.seq_len = seq_len
+        self.pred_len = pred_len
         self.RLat = RLat
         self.RLong = RLong
 
@@ -73,9 +74,9 @@ class DeepMCDataset(object):
             xs=np.arange(self.length)
             ys=cubic_interploation_model(xs)
 
-            self.WPD_x[i-1,:,-1] = ys
+            self.WPD_x[i-1,:,-3] = ys
             
-        self.WPD_x[:,:,-3] = self.RLong
+        self.WPD_x[:,:,-1] = self.RLong
         self.WPD_x[:,:,-2] = self.RLat
 
         wptree = pywt.WaveletPacket(data=self.U, wavelet='db1', mode='symmetric', maxlevel=self.levels)
@@ -97,16 +98,15 @@ class DeepMCDataset(object):
         print('aws data loading finish..')
 
     def __getitem__(self, idx):
-        return (self.WPD[0][idx:idx+self.seq_len],
-        self.WPD[1][idx:idx+self.seq_len],
-        self.WPD[2][idx:idx+self.seq_len],
-        self.WPD[3][idx:idx+self.seq_len],
-        self.WPD[4][idx:idx+self.seq_len],
-        self.aws[idx+self.seq_len:idx+self.seq_len+self.seq_len]
+        # WPD_x, WPD_u is a input of deeplearning model
+        # U is GT
+        return (self.WPD_x[:,idx:idx+self.seq_len,:],
+        self.WPD_u[:,idx:idx+self.seq_len],
+        self.U[idx+self.seq_len:idx+self.seq_len+self.pred_len]
         )
 
     def __len__(self):
-        return len(self.aws) - self.seq_len - 24
+        return len(self.aws) - self.seq_len - self.pred_len - 1
 
     def avg(self, levels):
         first = True
