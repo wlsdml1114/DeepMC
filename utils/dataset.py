@@ -1,5 +1,5 @@
-import torch
 import pywt
+
 import pandas as pd
 import numpy as np
 
@@ -43,6 +43,7 @@ class DeepMCDataset(object):
         self.WPD_x = np.zeros((self.levels,self.length,len(self.predictors)+3))
         self.WPD_u = np.zeros((self.levels,self.length))
 
+        # higher level means more longer scale
         for j in range(len(self.predictors)):
             wptree = pywt.WaveletPacket(data=self.Z[:,j], wavelet='db1', mode='symmetric', maxlevel=self.levels)
             for i in range(1,6):
@@ -106,7 +107,7 @@ class DeepMCDataset(object):
         )
 
     def __len__(self):
-        return len(self.aws) - self.seq_len - self.pred_len - 1
+        return self.length - self.seq_len - self.pred_len - 1
 
     def avg(self, levels):
         first = True
