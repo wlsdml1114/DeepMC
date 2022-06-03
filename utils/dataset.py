@@ -39,9 +39,10 @@ class DeepMCDataset(object):
         self.U = self.Y - self.Y_bar
         
         # X = (Z,Y,{Rlat, Rlong})
-        # WPD = (num_levels, lengths, X)
+        # WPD_x = (num_levels, lengths, X)
+        # WPD_u = (num_levels, lengths, 1) / 1 for torch.stack
         self.WPD_x = np.zeros((self.levels,self.length,len(self.predictors)+3))
-        self.WPD_u = np.zeros((self.levels,self.length))
+        self.WPD_u = np.zeros((self.levels,self.length,1))
 
         # higher level means more longer scale
         for j in range(len(self.predictors)):
@@ -94,16 +95,17 @@ class DeepMCDataset(object):
             xs=np.arange(self.length)
             ys=cubic_interploation_model(xs)
 
-            self.WPD_u[i-1,:] = ys
+            self.WPD_u[i-1,:0] = ys
 
         print('aws data loading finish..')
 
     def __getitem__(self, idx):
         # WPD_x, WPD_u is a input of deeplearning model
         # U is GT
-        return (self.WPD_x[:,idx:idx+self.seq_len,:],
-        self.WPD_u[:,idx:idx+self.seq_len],
-        self.U[idx+self.seq_len:idx+self.seq_len+self.pred_len]
+        return (
+            self.WPD_x[:,idx:idx+self.seq_len,:],
+            self.WPD_u[:,idx:idx+self.seq_len,:],
+            self.U[idx+self.seq_len:idx+self.seq_len+self.pred_len]
         )
 
     def __len__(self):
