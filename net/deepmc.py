@@ -30,7 +30,7 @@ class LSTMstack(nn.Module):
             nn.BatchNorm1d(num_features=7)
         )
         self.lstm = nn.LSTM(input_size = 7, hidden_size = 7, dropout = 0.2, num_layers = 2, batch_first = True)
-        
+
     def forward(self, WPD):
         # cnnstack output
         cnn_output = self.sequence(WPD)

@@ -39,10 +39,10 @@ class DeepMCDataset(object):
         self.U = self.Y - self.Y_bar
         
         # X = (Z,Y,{Rlat, Rlong})
-        # WPD_x = (num_levels, lengths, X)
-        # WPD_u = (num_levels, lengths, 1) / 1 for torch.stack
-        self.WPD_x = np.zeros((self.levels,self.length,len(self.predictors)+3))
-        self.WPD_u = np.zeros((self.levels,self.length,1))
+        # WPD_x = (num_levels, X, lengths)
+        # WPD_u = (num_levels, 1, lengths) / 1 for torch.stack
+        self.WPD_x = np.zeros((self.levels,len(self.predictors)+3,self.length))
+        self.WPD_u = np.zeros((self.levels,1,self.length))
 
         # higher level means more longer scale
         for j in range(len(self.predictors)):
@@ -60,7 +60,7 @@ class DeepMCDataset(object):
                 xs=np.arange(self.length)
                 ys=cubic_interploation_model(xs)
 
-                self.WPD_x[i-1,:,j] = ys
+                self.WPD_x[i-1,j,:] = ys
 
         wptree = pywt.WaveletPacket(data=self.Y, wavelet='db1', mode='symmetric', maxlevel=self.levels)
         for i in range(1,6):
@@ -76,10 +76,10 @@ class DeepMCDataset(object):
             xs=np.arange(self.length)
             ys=cubic_interploation_model(xs)
 
-            self.WPD_x[i-1,:,-3] = ys
+            self.WPD_x[i-1,-3,:] = ys
             
-        self.WPD_x[:,:,-1] = self.RLong
-        self.WPD_x[:,:,-2] = self.RLat
+        self.WPD_x[:,-1,:] = self.RLong
+        self.WPD_x[:,-2,:] = self.RLat
 
         wptree = pywt.WaveletPacket(data=self.U, wavelet='db1', mode='symmetric', maxlevel=self.levels)
         for i in range(1,6):
@@ -95,17 +95,16 @@ class DeepMCDataset(object):
             xs=np.arange(self.length)
             ys=cubic_interploation_model(xs)
 
-            self.WPD_u[i-1,:0] = ys
+            self.WPD_u[i-1,0,:] = ys
 
         print('aws data loading finish..')
 
     def __getitem__(self, idx):
         # WPD_x, WPD_u is a input of deeplearning model
         # U is GT
-        return (
-            self.WPD_x[:,idx:idx+self.seq_len,:],
-            self.WPD_u[:,idx:idx+self.seq_len,:],
-            self.U[idx+self.seq_len:idx+self.seq_len+self.pred_len]
+        return (self.WPD_x[:,:,idx:idx+self.seq_len],
+        self.WPD_u[:,:,idx:idx+self.seq_len],
+        self.U[idx+self.seq_len:idx+self.seq_len+self.pred_len]
         )
 
     def __len__(self):
