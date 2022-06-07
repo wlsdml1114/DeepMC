@@ -3,20 +3,78 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch import dropout, nn
 
-class Attention(nn.Module):
-    def __init__(self, enc_hid_dim, dec_hid_dim):
+class Attention_Decoder(nn.Module):
+    def __init__(self,num_encoder_hidden : int , num_encoder_times : int, num_decoder_hidden : int,num_decoder_times : int):
         super().__init__()
-        self.attn = nn.Linear((enc_hid_dim * 2) + dec_hid_dim, dec_hid_dim)
-        self.v = nn.Linear(dec_hid_dim, 1, bias = False)
+        self.num_encoder_hidden = num_encoder_hidden
+        self.num_encoder_times = num_encoder_times
+        self.num_decoder_hidden = num_decoder_hidden
+        self.num_decoder_times = num_decoder_times
+
+        self.W_a = nn.Linear(self.num_decoder_hidden, self.num_decoder_times)
+        self.U_a = nn.Linear(self.num_encoder_hidden, self.num_encoder_times)
+        self.v_a = nn.Linear(self.num_encoder_times+self.num_decoder_times,1)
+        self.phi_weight = nn.Linear(self.num_encoder_times, self.num_encoder_hidden)
+
+        self.Decoder = nn.LSTMCell(self.num_encoder_hidden, self.num_decoder_hidden)
+    
+    def forward(self, LSTM, CNNs):
+        # 1 <= j <= T  , num_encoder_times T is lstmstack seq length, in this case T = 18
+        # 1 <= i <= T' , num_decoder_times T' is lstm decoder seq length, in this case T' = 12
+
+        # Position based content attention layer
+        # s_i / (H', 1)
+        s_i = torch.rand((self.num_decoder_hidden))
+        v_a_output = []
+        for j in range(self.num_encoder_times):
+                
+            # delta_i_j / (T, 1)
+            delta_i_j = torch.zeros((self.num_encoder_times))
+            delta_i_j[:j] = 1
+
+            # phi_delta / (H, 1)
+            phi_delta = self.phi_weight(delta_i_j)
+            # phi_delta_hadamard / (H, 1)
+            phi_delta_hadamard = phi_delta*LSTM[j]
+
+            # U_a_output / (T, 1)
+            U_a_output = self.U_a(phi_delta_hadamard)
+            
+            # W_a_output / (T', 1)
+            W_a_output = self.W_a(s_i)
+
+            # concat / (T'+T, 1)
+            concat = torch.cat((W_a_output,U_a_output))
+
+            # delta_i_t_j / (T+T', 1)
+            delta_i_T_j = torch.zeros((self.num_encoder_times+self.num_decoder_times))
+            delta_i_T_j[i+self.num_encoder_times-j] = 1
+
+            # concat_tanh / (T'+T, 1)
+            concat_tanh = torch.tanh(concat)
+
+            # concat_tanh_hadamard_delta / (T'+T, 1)
+            concat_tanh_hadamard_delta = concat_tanh*delta_i_T_j
+
+            # v_a_output / scalar
+            v_a_output.append(self.v_a(concat_tanh_hadamard_delta))
         
-    def forward(self, hidden, encoder_outputs):
-        batch_size = encoder_outputs.shape[1]
-        src_len = encoder_outputs.shape[0]
-        hidden = hidden.unsqueeze(1).repeat(1, src_len, 1)
-        encoder_outputs = encoder_outputs.permute(1, 0, 2)
-        energy = torch.tanh(self.attn(torch.cat((hidden, encoder_outputs), dim = 2))) 
-        attention = self.v(energy).squeeze(2)
-        return F.softmax(attention, dim=1)
+        # e_ij / (T, 1)
+        e_ij = torch.cat(v_a_output)
+
+        # a_ij / (T, 1)
+        a_ij = torch.softmax(e_ij,dim=0)
+
+        a_ij = a_ij.unsqueeze(1)
+        # a_ij / (1, T)
+        a_ij = a_ij.permute(1,0)
+
+        # c_i = (1, H)
+        c_i = torch.mm(a_ij,LSTM)
+
+        # Scaled Guided Attention Layer
+
+        return c_i
 
 class LSTMstack(nn.Module):
     def __init__(self):
