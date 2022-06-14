@@ -1,9 +1,11 @@
 import warnings
 warnings.filterwarnings(action='ignore') 
 import argparse
+
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DDPPlugin
+
 from net.deepmc import DeepMC
 from utils.dataloader import DeepMCDataLoader
 
@@ -36,47 +38,35 @@ if __name__ == "__main__":
 
 	#dataloader loading
 	dl = DeepMCDataLoader(
-		file_path = args.data_path, 
-		predictor = args.predictor, 
-		seq_len= args.seq_len,
-		st_num=args.st_num,
-		batchsize= args.batch_size,
-		num_workers=args.num_workers
+		file_path = '/home/ubuntu/jini1114/aws.csv',
+		predictor = ['평균 기온', '최고 기온', '최저 기온'],
+		target = '평균 기온', 
+		seq_len = 24, 
+		pred_len = 12
 	)
 	dl.setup()
 
 	#setup model
-	deepmc = DeepMC(seq_len = args.seq_len, lr = args.learning_rate)
-	
+	deepmc = DeepMC(
+		num_encoder_hidden=7, 
+		num_encoder_times=18,
+		num_decoder_hidden = 20,
+		num_decoder_times=12, 
+		batch_size= 16, 
+		num_of_CNN_stacks = 7,
+		cnn_output_size = 105,
+		num_feature = 3
+	)
+
 	#setup trainer
 	trainer = Trainer(
 		max_epochs=args.num_epochs, 
-		gpus=args.num_gpus, 
-		accelerator="ddp",
-		plugins=DDPPlugin(find_unused_parameters=False),
+		gpus = args.num_gpus,
+		accelerator = 'ddp',
+		plugins = DDPPlugin(find_unused_parameters = False),
 		logger = wandb_logger
 	)
 
 	#training
 	trainer.fit(deepmc, datamodule=dl)
-	'''
-	if args.model_save :
-		print('training model save')
-		trainer.save_checkpoint(os.path.join(args.model_path,'./ddp_%s_maskrcnn.pt'%(args.name)))
-		
-		#model to onnx
-		X = torch.tensor(np.zeros([2,3,680,720])).to(torch.float)
-		torch.onnx.export(ddpmaskrcnn,                     # model being run
-						X,              # model input (or a tuple for multiple inputs)
-						os.path.join(args.model_path,"ddp_%s_maskrcnn.onnx"%(args.name)), # where to save the model (can be a file or file-like object)
-						export_params=True,        # store the trained parameter weights inside the model file
-						opset_version=10,          # the ONNX version to export the model to
-						do_constant_folding=True,  # whether to execute constant folding for optimization
-						input_names = ['input'],   # the model's input names
-						output_names = ['output'], # the model's output names
-						dynamic_axes={'input' : {0 : 'batch_size'},    # variable lenght axes
-										'output' : {0 : 'batch_size'}}) 
-		
-	else :
-		print('training model doesnt save')
-		'''
+	trainer.save_checkpoint

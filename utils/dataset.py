@@ -1,4 +1,5 @@
 import pywt
+import torch
 
 import pandas as pd
 import numpy as np
@@ -97,15 +98,18 @@ class DeepMCDataset(object):
 
             self.WPD_u[i-1,0,:] = ys
 
+        self.WPD_x = torch.tensor(self.WPD_x,dtype=torch.float32)
+        self.WPD_u = torch.tensor(self.WPD_u,dtype=torch.float32)
+        self.U = torch.tensor(self.U,dtype=torch.float32)
         print('aws data loading finish..')
-
+        
     def __getitem__(self, idx):
         # WPD_x, WPD_u is a input of deeplearning model
         # U is GT
         return (self.WPD_x[:,:,idx:idx+self.seq_len],
-        self.WPD_u[:,:,idx:idx+self.seq_len],
-        self.U[idx+self.seq_len:idx+self.seq_len+self.pred_len]
-        )
+                self.WPD_u[:,:,idx:idx+self.seq_len],
+                self.U[idx+self.seq_len:idx+self.seq_len+self.pred_len])
+            
 
     def __len__(self):
         return self.length - self.seq_len - self.pred_len - 1
