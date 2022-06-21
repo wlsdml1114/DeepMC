@@ -61,13 +61,14 @@ if __name__ == "__main__":
 
 	# setup trainer
 	# single GPU trainer
+	'''
 	trainer = Trainer(
 		max_epochs=args.num_epochs, 
 		gpus = 1,
 		logger = wandb_logger
 	)
+	'''
 	# ddp trainer
-	''' 
 	trainer = Trainer(
 		max_epochs=args.num_epochs, 
 		gpus = args.num_gpus,
@@ -75,8 +76,7 @@ if __name__ == "__main__":
 		plugins = DDPPlugin(find_unused_parameters = False),
 		logger = wandb_logger
 	)
-	'''
 
 	#training
 	trainer.fit(deepmc, datamodule=dl)
-	trainer.save_checkpoint
+	trainer.save_checkpoint()
