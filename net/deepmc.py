@@ -36,7 +36,6 @@ class DeepMC(pl.LightningModule):
         self.LSTMstack = LSTMstack(self.num_encoder_feature)
 
         # CNNstacks for middel & short scale
-        #cnnstack = CNNstack(self.num_encoder_feature).to(self.device)
         self.CNNstacks = [CNNstack(self.num_encoder_feature) 
                         for _ in range(self.num_of_CNN_stacks)]
         # Using ModuleList so that this layer list can be moved to CUDA 
@@ -74,11 +73,16 @@ class DeepMC(pl.LightningModule):
 
         # Decoder
         # hidden state / (batch size, decoder hidden size)
-        self.s_i = torch.rand((self.batch_size,self.num_decoder_hidden)).cuda()
+        #self.s_i = torch.rand((self.batch_size,self.num_decoder_hidden))
+        self.register_buffer("s_i", torch.rand((self.batch_size,self.num_decoder_hidden)))
         # cell state / (batch size, decoder hidden size)
-        self.cell_state = torch.rand((self.batch_size,self.num_decoder_hidden)).cuda()
+        #self.cell_state = torch.rand((self.batch_size,self.num_decoder_hidden))
+        self.register_buffer("cell_state", torch.rand((self.batch_size,self.num_decoder_hidden)))
         # decoder output / (batch size, 1)
-        self.m_i = torch.rand((self.batch_size, 1)).cuda()
+        #self.m_i = torch.rand((self.batch_size, 1))
+        self.register_buffer("m_i", torch.rand((self.batch_size, 1)))
+
+        
 
         # Decoder layer
         # input / attention context vector c_i + c_prime_i

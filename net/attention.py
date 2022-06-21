@@ -26,7 +26,6 @@ class Position_based_content_attention(nn.Module):
     def forward(self, LSTM, s_i, i):
         # 1 <= j <= T  , num_encoder_times T is lstmstack seq length, in this case T = 18
         # 1 <= i <= T' , num_decoder_times T' is lstm decoder seq length, in this case T' = 12
-
         # Position based content attention layer
         v_a_output = []
         for j in range(self.num_encoder_times):
@@ -51,6 +50,7 @@ class Position_based_content_attention(nn.Module):
             # concat / (batch,size, decoder time step + encoder time step)
             concat = torch.cat((W_a_output,U_a_output), dim=1)
 
+            
             # delta_i_t_j / (decoder time step + encoder time step)
             delta_i_T_j = torch.zeros((self.num_encoder_times+self.num_decoder_times)).cuda()
             delta_i_T_j[:self.num_encoder_times] = 1
