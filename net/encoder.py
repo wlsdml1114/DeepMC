@@ -44,7 +44,7 @@ class LSTMstack(nn.Module):
 
 class CNNstack(nn.Module):
 
-    def __init__(self, num_encoder_feature):
+    def __init__(self, num_encoder_feature : int):
 
         super().__init__()
         

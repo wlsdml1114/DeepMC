@@ -32,7 +32,7 @@ class Position_based_content_attention(nn.Module):
         for j in range(self.num_encoder_times):
                 
             # delta_i_j / (encoder time step + decoder time step)
-            delta_i_j = torch.zeros((self.num_encoder_times + self.num_decoder_times))
+            delta_i_j = torch.zeros((self.num_encoder_times + self.num_decoder_times)).cuda()
             delta_i_j[i+self.num_encoder_times-j] = 1
 
             # phi_delta / (encoder hidden size * 2)
@@ -52,7 +52,7 @@ class Position_based_content_attention(nn.Module):
             concat = torch.cat((W_a_output,U_a_output), dim=1)
 
             # delta_i_t_j / (decoder time step + encoder time step)
-            delta_i_T_j = torch.zeros((self.num_encoder_times+self.num_decoder_times))
+            delta_i_T_j = torch.zeros((self.num_encoder_times+self.num_decoder_times)).cuda()
             delta_i_T_j[:self.num_encoder_times] = 1
 
             # concat_tanh / (batch size, decoder time step + encoder time step)
@@ -96,8 +96,10 @@ class Scaled_Guided_Attention(nn.Module):
         self.cnn_output_size = cnn_output_size
         
         # energy weight
-        linear = nn.Linear(self.num_decoder_hidden+self.cnn_output_size,1)
-        self.w_i_j_T = [copy.deepcopy(linear) for i in range(self.num_of_CNN_stacks)]
+        #linear = nn.Linear(self.num_decoder_hidden+self.cnn_output_size,1)
+        self.w_i_j_T = [nn.Linear(self.num_decoder_hidden+self.cnn_output_size,1)
+                        for _ in range(self.num_of_CNN_stacks)]
+        self.w_i_j_T = torch.nn.ModuleList(self.w_i_j_T)
     
     def forward(self, CNNs, s_i):
         # 1 <= j <= T  , num_encoder_times T is lstmstack seq length, in this case T = 18

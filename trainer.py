@@ -1,6 +1,7 @@
 import warnings
 warnings.filterwarnings(action='ignore') 
 import argparse
+import torch
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
@@ -46,7 +47,7 @@ if __name__ == "__main__":
 	)
 	dl.setup()
 
-	#setup model
+	# setup model
 	deepmc = DeepMC(
 		num_encoder_hidden=7, 
 		num_encoder_times=18,
@@ -58,7 +59,15 @@ if __name__ == "__main__":
 		num_feature = 3
 	)
 
-	#setup trainer
+	# setup trainer
+	# single GPU trainer
+	trainer = Trainer(
+		max_epochs=args.num_epochs, 
+		gpus = 1,
+		logger = wandb_logger
+	)
+	# ddp trainer
+	''' 
 	trainer = Trainer(
 		max_epochs=args.num_epochs, 
 		gpus = args.num_gpus,
@@ -66,6 +75,7 @@ if __name__ == "__main__":
 		plugins = DDPPlugin(find_unused_parameters = False),
 		logger = wandb_logger
 	)
+	'''
 
 	#training
 	trainer.fit(deepmc, datamodule=dl)

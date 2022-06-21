@@ -4,9 +4,9 @@ import copy
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
-from net.encoder import CNNstack, LSTMstack
-from net.attention import Position_based_content_attention, Scaled_Guided_Attention
-from net.decoder import Decoder
+from .encoder import CNNstack, LSTMstack
+from .attention import Position_based_content_attention, Scaled_Guided_Attention
+from .decoder import Decoder
 
 class DeepMC(pl.LightningModule):
 
@@ -33,11 +33,14 @@ class DeepMC(pl.LightningModule):
 
         # Encoder 
         # LSTMstack for long scale
-        self.LSTMstack = LSTMstack(self.num_encoder_feature).to(self.device)
+        self.LSTMstack = LSTMstack(self.num_encoder_feature)
 
         # CNNstacks for middel & short scale
-        cnnstack = CNNstack(self.num_encoder_feature).to(self.device)
-        self.CNNstacks = [copy.deepcopy(cnnstack) for i in range(self.num_of_CNN_stacks)]
+        #cnnstack = CNNstack(self.num_encoder_feature).to(self.device)
+        self.CNNstacks = [CNNstack(self.num_encoder_feature) 
+                        for _ in range(self.num_of_CNN_stacks)]
+        # Using ModuleList so that this layer list can be moved to CUDA 
+        self.CNNstacks = torch.nn.ModuleList(self.CNNstacks)
         
         # set where CNN should be look
         # 0 is shortest scale, 5 is longest scale
@@ -54,7 +57,7 @@ class DeepMC(pl.LightningModule):
             num_decoder_hidden = self.num_decoder_hidden,
             num_decoder_times= self.num_decoder_times, 
             batch_size= self.batch_size
-        ).to(self.device)
+        )
 
         # Scaled_Guided_Attention
         # intput / CNN encoder output & s_i-1
@@ -67,15 +70,15 @@ class DeepMC(pl.LightningModule):
             batch_size= self.batch_size, 
             num_of_CNN_stacks = self.num_of_CNN_stacks, 
             cnn_output_size = self.cnn_output_size
-        ).to(self.device)
+        )
 
         # Decoder
         # hidden state / (batch size, decoder hidden size)
-        self.s_i = torch.rand((self.batch_size,self.num_decoder_hidden))
+        self.s_i = torch.rand((self.batch_size,self.num_decoder_hidden)).cuda()
         # cell state / (batch size, decoder hidden size)
-        self.cell_state = torch.rand((self.batch_size,self.num_decoder_hidden))
+        self.cell_state = torch.rand((self.batch_size,self.num_decoder_hidden)).cuda()
         # decoder output / (batch size, 1)
-        self.m_i = torch.rand((self.batch_size, 1))
+        self.m_i = torch.rand((self.batch_size, 1)).cuda()
 
         # Decoder layer
         # input / attention context vector c_i + c_prime_i
@@ -84,7 +87,7 @@ class DeepMC(pl.LightningModule):
             num_encoder_hidden=self.num_encoder_hidden, 
             num_decoder_hidden = self.num_decoder_hidden,
             cnn_output_size = self.cnn_output_size
-        ).to(self.device)
+        )
 
     def forward(self, batch):
         # 1 <= j <= T  , num_encoder_times T is lstmstack seq length, in this case T = 18
@@ -138,7 +141,7 @@ class DeepMC(pl.LightningModule):
         y_hat = self([X,U])
 
         loss = self.loss(y_hat, Target.unsqueeze(2))
-        print(loss)
+        #print("loss : ",loss)
         self.log("training_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
         self.manual_backward(loss, retain_graph=True)
         return loss
@@ -172,7 +175,7 @@ class DeepMC(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
-
+    
     @property
     def automatic_optimization(self) -> bool:
         return False
