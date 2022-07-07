@@ -1,6 +1,7 @@
 import torch
 import copy
 
+import numpy as np
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
@@ -12,6 +13,8 @@ class DeepMC(pl.LightningModule):
 
     def __init__(self,num_encoder_hidden : int , num_encoder_times : int, num_decoder_hidden : int,num_decoder_times : int, batch_size : int, num_of_CNN_stacks : int, cnn_output_size : int, num_feature : int, seq_len : int = 24, lr : int = 1e-3):
         super().__init__()
+        # for manual optimization
+        self.automatic_optimization = False
 
         # Hyper parameter
         self.num_encoder_hidden = num_encoder_hidden
@@ -71,19 +74,6 @@ class DeepMC(pl.LightningModule):
             cnn_output_size = self.cnn_output_size
         )
 
-        # Decoder
-        # hidden state / (batch size, decoder hidden size)
-        #self.s_i = torch.rand((self.batch_size,self.num_decoder_hidden))
-        self.register_buffer("s_i", torch.rand((self.batch_size,self.num_decoder_hidden)))
-        # cell state / (batch size, decoder hidden size)
-        #self.cell_state = torch.rand((self.batch_size,self.num_decoder_hidden))
-        self.register_buffer("cell_state", torch.rand((self.batch_size,self.num_decoder_hidden)))
-        # decoder output / (batch size, 1)
-        #self.m_i = torch.rand((self.batch_size, 1))
-        self.register_buffer("m_i", torch.rand((self.batch_size, 1)))
-
-        
-
         # Decoder layer
         # input / attention context vector c_i + c_prime_i
         # output / lstm decoder output
@@ -99,6 +89,20 @@ class DeepMC(pl.LightningModule):
         X = batch[0]
         U = batch[1]
 
+        # batch_size
+        batch_size = X.shape[0]
+
+        # Decoder
+        # hidden state / (batch size, decoder hidden size)
+        #self.s_i = torch.rand((self.batch_size,self.num_decoder_hidden))
+        s_i = torch.rand((batch_size,self.num_decoder_hidden), requires_grad=True).to(self.device)
+        # cell state / (batch size, decoder hidden size)
+        #self.cell_state = torch.rand((self.batch_size,self.num_decoder_hidden))
+        cell_state = torch.rand((batch_size,self.num_decoder_hidden), requires_grad=True).to(self.device)
+        # decoder output / (batch size, 1)
+        #self.m_i = torch.rand((self.batch_size, 1))
+        m_i = torch.rand((batch_size, 1), requires_grad=True).to(self.device)
+
         # Encoder
         # LSTM looks long scale 
         # thats why X & U level is 4
@@ -112,6 +116,113 @@ class DeepMC(pl.LightningModule):
 
         # Attention & decoder
         output = []
+        for i in range(self.num_decoder_times):
+
+            # c_i / (batch size, 1, encoder hidden size)
+            c_i = self.Position_based_content_attention(LSTM, s_i, i)
+
+            # CNNs / (batch size, # of CNN stack, output size of CNN stack)
+            # c_prime_i / (batch size, 1, output size of CNN stack)
+            c_prime_i = self.Scaled_Guided_Attention(CNNs, s_i)
+            
+            # Decoder
+            # decoder_input / (batch size, 1(output of decoder) + encoder hidden size * 2 + output size of CNN stack)
+            decoder_input = torch.cat((m_i, c_i.squeeze(1),c_prime_i.squeeze(1)),dim=1)
+            
+            # s_i / hidden state of Decoder LSTM / (batch size, decoder hidden size)
+            # cell_state / cell state of Decoder LSTM / (batch size, decoder hidden size)
+            # m_i / outptu of decoder / (batch size, 1)
+            m_i, (s_i, cell_state) = self.Decoder(decoder_input, s_i, cell_state)
+
+            output.append(m_i.clone())
+
+        # output (decoder timestep, batch size, 1)
+        # after permute output (batch size, decoder timestep, 1)
+        output = torch.stack(output, dim=0).permute(1,0,2)
+        
+        return output
+
+    def training_step(self, batch, batch_idx):
+
+        opt = self.optimizers()
+
+        X = batch[0]
+        U = batch[1]
+        Target = batch[2]
+
+        # batch_size
+        batch_size = X.shape[0]
+
+        # Decoder
+        # hidden state / (batch size, decoder hidden size)
+        #self.s_i = torch.rand((self.batch_size,self.num_decoder_hidden))
+        s_i = torch.rand((batch_size,self.num_decoder_hidden), requires_grad=True).to(self.device)
+        # cell state / (batch size, decoder hidden size)
+        #self.cell_state = torch.rand((self.batch_size,self.num_decoder_hidden))
+        cell_state = torch.rand((batch_size,self.num_decoder_hidden), requires_grad=True).to(self.device)
+        # decoder output / (batch size, 1)
+        #self.m_i = torch.rand((self.batch_size, 1))
+        m_i = torch.rand((batch_size, 1), requires_grad=True).to(self.device)
+
+        with torch.autograd.set_detect_anomaly(True) : 
+            opt.zero_grad()
+
+            LSTM = self.LSTMstack(torch.cat((X[:,4,:,:],U[:,4,:,:]),1))
+
+            # CNN looks middle & short scale
+            CNNs = [
+                self.CNNstacks[i](torch.cat((X[:,self.X_levels[i],:,:],U[:,self.U_levels[i],:,:]),1)) for i in range(self.num_of_CNN_stacks)
+            ]
+            CNNs = torch.stack(CNNs,dim=1)
+
+            # Attention & decoder
+            losses = []
+            for i in range(self.num_decoder_times):
+                opt.zero_grad()
+
+                # c_i / (batch size, 1, encoder hidden size)
+                c_i = self.Position_based_content_attention(LSTM, s_i, i)
+
+                # CNNs / (batch size, # of CNN stack, output size of CNN stack)
+                # c_prime_i / (batch size, 1, output size of CNN stack)
+                c_prime_i = self.Scaled_Guided_Attention(CNNs, s_i)
+                
+                # Decoder
+                # decoder_input / (batch size, 1(output of decoder) + encoder hidden size * 2 + output size of CNN stack)
+                decoder_input = torch.cat((m_i, c_i.squeeze(1),c_prime_i.squeeze(1)),dim=1)
+                
+                # s_i / hidden state of Decoder LSTM / (batch size, decoder hidden size)
+                # cell_state / cell state of Decoder LSTM / (batch size, decoder hidden size)
+                # m_i / outptu of decoder / (batch size, 1)
+                m_i, (s_i, cell_state) = self.Decoder(decoder_input, s_i, cell_state)
+
+                loss = self.loss(m_i.detach(), Target[:,i].unsqueeze(1))
+                losses.append(loss)
+                loss.requires_grad = True
+                self.manual_backward(loss, retain_graph = True)
+                opt.step()
+                
+            losses = torch.mean(torch.stack(losses))
+            self.log("training_loss", losses, on_step=True, on_epoch=True, sync_dist=True)
+
+        #return loss
+
+    def validation_step(self, batch, batch_idx):
+
+        X = batch[0]
+        U = batch[1]
+        Target = batch[2]
+        '''
+        LSTM = self.LSTMstack(torch.cat((X[:,4,:,:],U[:,4,:,:]),1))
+
+        # CNN looks middle & short scale
+        CNNs = [
+            self.CNNstacks[i](torch.cat((X[:,self.X_levels[i],:,:],U[:,self.U_levels[i],:,:]),1)) for i in range(self.num_of_CNN_stacks)
+        ]
+        CNNs = torch.stack(CNNs,dim=1)
+
+        # Attention & decoder
+        losses = []
         for i in range(self.num_decoder_times):
 
             # c_i / (batch size, 1, encoder hidden size)
@@ -130,35 +241,13 @@ class DeepMC(pl.LightningModule):
             # m_i / outptu of decoder / (batch size, 1)
             self.m_i, (self.s_i, self.cell_state) = self.Decoder(decoder_input,self.s_i,self.cell_state)
 
-            output.append(self.m_i)
+            loss = self.loss(self.m_i.detach(), Target[:,i].unsqueeze(1))
+            losses.append(loss)
+            loss.requires_grad = True
 
-        # output (decoder timestep, batch size, 1)
-        # after permute output (batch size, decoder timestep, 1)
-        output = torch.stack(output, dim=0).permute(1,0,2)
-        
-        return output
-
-    def training_step(self, batch, batch_idx):
-        X = batch[0]
-        U = batch[1]
-        Target = batch[2]
-        y_hat = self([X,U])
-
-        loss = self.loss(y_hat, Target.unsqueeze(2))
-        #print("loss : ",loss)
-        self.log("training_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
-        self.manual_backward(loss, retain_graph=True)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        X = batch[0]
-        U = batch[1]
-        Target = batch[2]
-        y_hat = self([X,U])
-
-        loss = self.loss(y_hat, Target.unsqueeze(2))
-        self.log("validation_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
-
+        losses = torch.mean(torch.stack(losses)).cpu().detach().numpy()
+        self.log("validation_loss", losses, on_step=True, on_epoch=True, sync_dist=True)
+        '''
     def test_step(self, batch, batch_idx):
         X = batch[0]
         U = batch[1]
@@ -179,7 +268,8 @@ class DeepMC(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
-    
+    '''
     @property
     def automatic_optimization(self) -> bool:
         return False
+        '''

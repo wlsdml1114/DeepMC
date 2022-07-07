@@ -46,7 +46,7 @@ class Position_based_content_attention(nn.Module):
             
             # W_a_output / (batch size, decoder time step)
             W_a_output = self.W_a(s_i)
-
+            
             # concat / (batch,size, decoder time step + encoder time step)
             concat = torch.cat((W_a_output,U_a_output), dim=1)
 

@@ -7,9 +7,11 @@ import numpy as np
 from scipy.interpolate import make_interp_spline
 
 class DeepMCDataset(object):
-    def __init__(self, file_path : str, predictors : list, target : str, seq_len : int, pred_len : int ,st_num : int = 90, levels :int = 5, RLat : float = 0.96, RLong : float = 1.5) -> None:
+    def __init__(self, file_path : str, predictors : list, target : str, seq_len : int, pred_len : int , start_date : object, end_date : object, st_num : int = 90, levels :int = 5, RLat : float = 0.96, RLong : float = 1.5) -> None:
         try :
             temp = pd.read_csv(file_path)
+            #temp['시각'] = pd.to_datetime(temp['시각'])
+            #temp = temp[(temp['시각']>start_date) & (temp['시각']<end_date)]
         except :
             print('wrong file name')
         # predictors = z, target = y
@@ -34,7 +36,7 @@ class DeepMCDataset(object):
 
         # weather station prediction
         # Y_bar = weather_station_prediction
-        self.Y_bar = self.Y - np.random.rand(self.length)
+        self.Y_bar = self.Y - np.random.uniform(low = 0.9, high = 1.1, size = self.length)
 
         # forecast error U
         self.U = self.Y - self.Y_bar
@@ -112,7 +114,7 @@ class DeepMCDataset(object):
             
 
     def __len__(self):
-        return self.length - self.seq_len - self.pred_len - 1
+        return self.length - self.seq_len - self.pred_len - 1 
 
     def avg(self, levels):
         first = True

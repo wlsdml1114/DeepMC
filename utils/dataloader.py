@@ -6,13 +6,15 @@ from .dataset import DeepMCDataset
 from typing import Tuple, Dict, Optional
 
 class DeepMCDataLoader(pl.LightningDataModule):
-    def __init__(self, file_path : str, predictor : list, target : str, seq_len : int, pred_len : int ,st_num : int = 90, levels : int = 5, batchsize : int = 16, num_workers : int =24):
+    def __init__(self, file_path : str, predictor : list, target : str, seq_len : int, pred_len : int , start_date : object, end_date : object, st_num : int = 90, levels : int = 5, batchsize : int = 16, num_workers : int =24):
         super().__init__()
         self.file_path = file_path
         self.predictor = predictor
         self.target = target
         self.seq_len = seq_len
         self.pred_len = pred_len
+        self.start_date = start_date
+        self.end_date = end_date
         self.st_num = st_num
         self.levels = levels
         self.batchsize = batchsize
@@ -27,6 +29,8 @@ class DeepMCDataLoader(pl.LightningDataModule):
             seq_len = self.seq_len, 
             pred_len = self.pred_len ,
             st_num = self.st_num, 
+            start_date = self.start_date,
+            end_date = self.end_date,
             levels = self.levels, 
             RLat  = 0.96, # Rlat, RLong is calculated by station information
             RLong  = 1.5

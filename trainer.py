@@ -3,6 +3,7 @@ warnings.filterwarnings(action='ignore')
 import argparse
 import torch
 
+from datetime import datetime
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DDPPlugin
@@ -15,7 +16,7 @@ def get_args():
 	parser = argparse.ArgumentParser(description='Arguments for the testing purpose.')	
 	parser.add_argument('--batch_size', type=int, required=False, default=32)
 	parser.add_argument('--num_gpus', type=int, required=False, default=3)
-	parser.add_argument('--num_epochs', type=int, required=False, default=2)
+	parser.add_argument('--num_epochs', type=int, required=False, default=10)
 	parser.add_argument('--learning_rate', type=int, required=False, default=1e-3)
 	parser.add_argument('--num_workers', type=int, required=False, default=24)
 	parser.add_argument('--model_save', type=bool, required=False, default=True)
@@ -24,6 +25,7 @@ def get_args():
 	parser.add_argument('--predictor', type=str, required=False, default='평균 기온')
 	parser.add_argument('--data_path', type=str, required=False, default='/home/ubuntu/jini1114/aws.csv')
 	parser.add_argument('--model_path', type=str, required=False, default='/home/ubuntu/jini1114/ddp_test/model')
+	parser.add_argument('--ddp', type=bool, required=False, default=False)
 	args = parser.parse_args()
 
 	return args
@@ -40,10 +42,12 @@ if __name__ == "__main__":
 	#dataloader loading
 	dl = DeepMCDataLoader(
 		file_path = '/home/ubuntu/jini1114/aws.csv',
-		predictor = ['평균 기온', '최고 기온', '최저 기온'],
+		predictor = ['최고 기온', '최저 기온','합계 강수량'],
 		target = '평균 기온', 
 		seq_len = 24, 
-		pred_len = 12
+		pred_len = 12,
+		start_date = datetime(2021,6,1,0,0),
+		end_date = datetime(2021,6,30,0,0)
 	)
 	dl.setup()
 
@@ -58,25 +62,28 @@ if __name__ == "__main__":
 		cnn_output_size = 105,
 		num_feature = 3
 	)
+	deepmc.train()
 
 	# setup trainer
-	# single GPU trainer
-	'''
-	trainer = Trainer(
-		max_epochs=args.num_epochs, 
-		gpus = 1,
-		logger = wandb_logger
-	)
-	'''
-	# ddp trainer
-	trainer = Trainer(
-		max_epochs=args.num_epochs, 
-		gpus = args.num_gpus,
-		accelerator = 'ddp',
-		plugins = DDPPlugin(find_unused_parameters = False),
-		logger = wandb_logger
-	)
+	if args.ddp == False : 
+		# single GPU trainer
+		print('single GPU')
+		trainer = Trainer(
+			max_epochs=args.num_epochs, 
+			gpus = 1,
+			logger = wandb_logger
+		)
+	else : 
+		# ddp trainer
+		print('multi GPU')
+		trainer = Trainer(
+			max_epochs=args.num_epochs, 
+			gpus = args.num_gpus,
+			accelerator = 'ddp',
+			plugins = DDPPlugin(find_unused_parameters = False),
+			logger = wandb_logger
+		)
 
 	#training
 	trainer.fit(deepmc, datamodule=dl)
-	trainer.save_checkpoint()
+	trainer.save_checkpoint('model.pt')
