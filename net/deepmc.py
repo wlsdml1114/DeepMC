@@ -156,54 +156,53 @@ class DeepMC(pl.LightningModule):
         # Decoder
         # hidden state / (batch size, decoder hidden size)
         #self.s_i = torch.rand((self.batch_size,self.num_decoder_hidden))
-        s_i = torch.rand((batch_size,self.num_decoder_hidden), requires_grad=True).to(self.device)
+        s_i = torch.zeros((batch_size,self.num_decoder_hidden), requires_grad=True).to(self.device)
         # cell state / (batch size, decoder hidden size)
         #self.cell_state = torch.rand((self.batch_size,self.num_decoder_hidden))
-        cell_state = torch.rand((batch_size,self.num_decoder_hidden), requires_grad=True).to(self.device)
+        cell_state = torch.zeros((batch_size,self.num_decoder_hidden), requires_grad=True).to(self.device)
         # decoder output / (batch size, 1)
         #self.m_i = torch.rand((self.batch_size, 1))
-        m_i = torch.rand((batch_size, 1), requires_grad=True).to(self.device)
+        m_i = torch.zeros((batch_size, 1), requires_grad=True).to(self.device)
 
-        with torch.autograd.set_detect_anomaly(True) : 
+        opt.zero_grad()
+
+        LSTM = self.LSTMstack(torch.cat((X[:,4,:,:],U[:,4,:,:]),1))
+
+        # CNN looks middle & short scale
+        CNNs = [
+            self.CNNstacks[i](torch.cat((X[:,self.X_levels[i],:,:],U[:,self.U_levels[i],:,:]),1)) for i in range(self.num_of_CNN_stacks)
+        ]
+        CNNs = torch.stack(CNNs,dim=1)
+
+        # Attention & decoder
+        losses = []
+        for i in range(self.num_decoder_times):
             opt.zero_grad()
 
-            LSTM = self.LSTMstack(torch.cat((X[:,4,:,:],U[:,4,:,:]),1))
+            # c_i / (batch size, 1, encoder hidden size)
+            c_i = self.Position_based_content_attention(LSTM, s_i, i)
 
-            # CNN looks middle & short scale
-            CNNs = [
-                self.CNNstacks[i](torch.cat((X[:,self.X_levels[i],:,:],U[:,self.U_levels[i],:,:]),1)) for i in range(self.num_of_CNN_stacks)
-            ]
-            CNNs = torch.stack(CNNs,dim=1)
+            # CNNs / (batch size, # of CNN stack, output size of CNN stack)
+            # c_prime_i / (batch size, 1, output size of CNN stack)
+            c_prime_i = self.Scaled_Guided_Attention(CNNs, s_i)
+            
+            # Decoder
+            # decoder_input / (batch size, 1(output of decoder) + encoder hidden size * 2 + output size of CNN stack)
+            decoder_input = torch.cat((m_i, c_i.squeeze(1),c_prime_i.squeeze(1)),dim=1)
+            
+            # s_i / hidden state of Decoder LSTM / (batch size, decoder hidden size)
+            # cell_state / cell state of Decoder LSTM / (batch size, decoder hidden size)
+            # m_i / outptu of decoder / (batch size, 1)
+            m_i, (s_i, cell_state) = self.Decoder(decoder_input, s_i, cell_state)
 
-            # Attention & decoder
-            losses = []
-            for i in range(self.num_decoder_times):
-                opt.zero_grad()
-
-                # c_i / (batch size, 1, encoder hidden size)
-                c_i = self.Position_based_content_attention(LSTM, s_i, i)
-
-                # CNNs / (batch size, # of CNN stack, output size of CNN stack)
-                # c_prime_i / (batch size, 1, output size of CNN stack)
-                c_prime_i = self.Scaled_Guided_Attention(CNNs, s_i)
-                
-                # Decoder
-                # decoder_input / (batch size, 1(output of decoder) + encoder hidden size * 2 + output size of CNN stack)
-                decoder_input = torch.cat((m_i, c_i.squeeze(1),c_prime_i.squeeze(1)),dim=1)
-                
-                # s_i / hidden state of Decoder LSTM / (batch size, decoder hidden size)
-                # cell_state / cell state of Decoder LSTM / (batch size, decoder hidden size)
-                # m_i / outptu of decoder / (batch size, 1)
-                m_i, (s_i, cell_state) = self.Decoder(decoder_input, s_i, cell_state)
-
-                loss = self.loss(m_i.detach(), Target[:,i].unsqueeze(1))
-                losses.append(loss)
-                loss.requires_grad = True
-                self.manual_backward(loss, retain_graph = True)
-                opt.step()
-                
-            losses = torch.mean(torch.stack(losses))
-            self.log("training_loss", losses, on_step=True, on_epoch=True, sync_dist=True)
+            loss = self.loss(m_i.detach(), Target[:,i].unsqueeze(1))
+            losses.append(loss)
+            loss.requires_grad = True
+            self.manual_backward(loss)
+            opt.step()
+            
+        losses = torch.mean(torch.stack(losses))
+        self.log("training_loss", losses, on_step=True, on_epoch=True, sync_dist=True)
 
         #return loss
 
