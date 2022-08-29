@@ -18,8 +18,8 @@ class Position_based_content_attention(nn.Module):
         self.batch_size = batch_size
 
         # Weights
-        self.W_a = nn.Linear(self.num_decoder_hidden, self.num_decoder_times)
-        self.U_a = nn.Linear(self.num_encoder_hidden*2, self.num_encoder_times)
+        self.W_a = nn.Linear(self.num_decoder_hidden, self.num_decoder_times + self.num_encoder_times)
+        self.U_a = nn.Linear(self.num_encoder_hidden*2, self.num_decoder_times + self.num_encoder_times)
         self.v_a = nn.Linear(self.num_encoder_times+self.num_decoder_times,1)
         self.phi_weight = nn.Linear(self.num_encoder_times + self.num_decoder_times, self.num_encoder_hidden * 2)
     
@@ -41,14 +41,14 @@ class Position_based_content_attention(nn.Module):
             # phi_delta_hadamard / (batch size, encoder hidden size * 2)
             phi_delta_hadamard = phi_delta*LSTM[:,j]
 
-            # U_a_output / (batch size, encoder time step)
+            # U_a_output / (batch size, decoder time step + encoder time step)
             U_a_output = self.U_a(phi_delta_hadamard)
             
-            # W_a_output / (batch size, decoder time step)
+            # W_a_output / (batch size, decoder time step + encoder time step)
             W_a_output = self.W_a(s_i)
             
             # concat / (batch,size, decoder time step + encoder time step)
-            concat = torch.cat((W_a_output,U_a_output), dim=1)
+            concat = W_a_output + U_a_output
 
             
             # delta_i_t_j / (decoder time step + encoder time step)
